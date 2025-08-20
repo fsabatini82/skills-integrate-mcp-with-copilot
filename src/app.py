@@ -28,7 +28,19 @@ def load_teachers():
 teachers = load_teachers()
 
 # Simple session store (in-memory)
-logged_in_teachers = set()
+import redis
+# Authentication helper for teacher login
+def get_current_teacher(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_password = teachers.get(credentials.username)
+    if not correct_password or not secrets.compare_digest(credentials.password, correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+def is_teacher_logged_in(username):
+    return redis_client.sismember("logged_in_teachers", username)
 # In-memory activity database
 def get_current_teacher(credentials: HTTPBasicCredentials = Depends(security)):
     correct_password = teachers.get(credentials.username)
@@ -40,19 +52,15 @@ def get_current_teacher(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 @app.post("/login")
-def login(credentials: HTTPBasicCredentials = Depends(security)):
-    username = credentials.username
-    password = credentials.password
-    if username in teachers and secrets.compare_digest(teachers[username], password):
-        logged_in_teachers.add(username)
-        return {"message": f"Logged in as {username}"}
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+def login(teacher: str = Depends(get_current_teacher)):
+    add_logged_in_teacher(teacher)
+    return {"message": f"Logged in as {teacher}"}
 
 @app.post("/logout")
 def logout(credentials: HTTPBasicCredentials = Depends(security)):
     username = credentials.username
-    if username in logged_in_teachers:
-        logged_in_teachers.remove(username)
+    if is_teacher_logged_in(username):
+        remove_logged_in_teacher(username)
         return {"message": f"Logged out {username}"}
     raise HTTPException(status_code=401, detail="Not logged in")
 
@@ -133,8 +141,6 @@ def get_activities():
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str, teacher: str = Depends(get_current_teacher)):
     """Sign up a student for an activity (teacher only)"""
-    if teacher not in logged_in_teachers:
-        raise HTTPException(status_code=401, detail="Teacher not logged in")
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
     activity = activities[activity_name]
@@ -142,13 +148,11 @@ def signup_for_activity(activity_name: str, email: str, teacher: str = Depends(g
         raise HTTPException(status_code=400, detail="Student is already signed up")
     activity["participants"].append(email)
     return {"message": f"Signed up {email} for {activity_name}"}
-
-
-@app.delete("/activities/{activity_name}/unregister")
+    activity["participants"].append(email)
+    return {"message": f"Signed up {email} for {activity_name}"}
+    """Unregister a student from an activity (teacher only)"""
 def unregister_from_activity(activity_name: str, email: str, teacher: str = Depends(get_current_teacher)):
     """Unregister a student from an activity (teacher only)"""
-    if teacher not in logged_in_teachers:
-        raise HTTPException(status_code=401, detail="Teacher not logged in")
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
     activity = activities[activity_name]
