@@ -1,0 +1,6 @@
+{
+  "teachers": [
+    {"username": "teacher1", "password": "$2b$12$KIXQJwQhQJv1zQhQJv1zQeQJv1zQhQJv1zQhQJv1zQhQJv1zQhQJv1z"},
+    {"username": "teacher2", "password": "$2b$12$Jv1zQhQJv1zQhQJv1zQeQJv1zQhQJv1zQhQJv1zQhQJv1zQhQJv1zQ"}
+  ]
+}
